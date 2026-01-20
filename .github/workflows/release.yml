@@ -42,7 +42,7 @@ jobs:
           bun build --compile --minify src/index.ts \
             --target=bun-${{ matrix.target }} \
             --outfile dist/${{ matrix.artifact }} \
-            --external chromium-bidi --external electron
+            --external playwright-core --external chromium-bidi --external electron
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -102,6 +102,9 @@ jobs:
             },
             "scripts": {
               "postinstall": "node ./scripts/postinstall.js"
+            },
+            "peerDependencies": {
+              "playwright-core": ">=1.40.0"
             },
             "repository": {
               "type": "git",
