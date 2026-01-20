@@ -7,7 +7,7 @@
     "bwsr": "./dist/bwsr"
   },
   "scripts": {
-    "build": "bun build --compile --minify src/index.ts --outfile dist/bwsr",
+    "build": "bun build --compile --minify src/index.ts --outfile dist/bwsr --external chromium-bidi --external electron",
     "dev": "bun run src/index.ts",
     "test": "bun test"
   },
