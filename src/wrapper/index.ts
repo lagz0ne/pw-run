@@ -8,6 +8,19 @@ import { encode, decode } from "../ipc/protocol";
 import { getPaths } from "../utils/paths";
 import { discoverBrowser } from "../browser/discovery";
 
+// Find an available port
+async function findAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+    server.on("error", reject);
+  });
+}
+
 export class Wrapper {
   public readonly session: string;
   private profile: Profile;
@@ -35,13 +48,16 @@ export class Wrapper {
       throw new Error(`Could not find ${browserType} browser. Install via: npx playwright install ${browserType}`);
     }
 
-    // Launch with random CDP port
+    // Find an available port for CDP
+    this.cdpPort = await findAvailablePort();
+
+    // Launch with specific CDP port
     this.browser = await launcher.launch({
       headless: this.profile.headless ?? true,
       executablePath,
       args: [
         ...(this.profile.args || []),
-        "--remote-debugging-port=0", // Random port
+        `--remote-debugging-port=${this.cdpPort}`,
       ],
     });
 
@@ -56,16 +72,8 @@ export class Wrapper {
       offline: this.profile.offline,
     });
 
-    // Get CDP WebSocket endpoint and extract port
-    // Note: wsEndpoint() may not be available on all browser types or configurations
-    // For Chromium, we can extract the port from the WebSocket endpoint
-    try {
-      const wsEndpoint = (this.browser as any).wsEndpoint?.() || "";
-      const match = wsEndpoint.match(/:(\d+)\//);
-      this.cdpPort = match ? parseInt(match[1], 10) : 0;
-    } catch {
-      this.cdpPort = 0;
-    }
+    // Create initial blank page for CDP clients
+    await this.context.newPage();
 
     // Start IPC server
     await this.startIpcServer();

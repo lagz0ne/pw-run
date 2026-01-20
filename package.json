@@ -1,6 +1,7 @@
 {
   "name": "bwsr",
   "version": "0.1.0",
+  "description": "Fast CLI for managing browser daemons via Playwright CDP",
   "module": "src/index.ts",
   "type": "module",
   "bin": {
@@ -11,6 +12,12 @@
     "dev": "bun run src/index.ts",
     "test": "bun test"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lagz0ne/pw-run"
+  },
+  "keywords": ["browser", "playwright", "cdp", "automation", "cli", "bun"],
+  "license": "MIT",
   "devDependencies": {
     "@types/bun": "latest"
   },
