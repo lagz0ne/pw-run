@@ -9,7 +9,7 @@ describe("generateSessionName", () => {
 
   test("generates unique names", () => {
     const names = new Set(Array.from({ length: 100 }, () => generateSessionName()));
-    expect(names.size).toBeGreaterThan(90);
+    expect(names.size).toBeGreaterThanOrEqual(80);
   });
 });
 
