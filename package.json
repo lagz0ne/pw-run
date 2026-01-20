@@ -1,0 +1,21 @@
+{
+  "name": "bwsr",
+  "version": "0.1.0",
+  "module": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "bwsr": "./dist/bwsr"
+  },
+  "scripts": {
+    "build": "bun build --compile --minify src/index.ts --outfile dist/bwsr",
+    "dev": "bun run src/index.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "playwright-core": "^1.57.0",
+    "yaml": "^2.3.4"
+  }
+}
