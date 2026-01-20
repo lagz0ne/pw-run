@@ -20,7 +20,34 @@ bwsr stop --all               # Clean up when done
 npm install bwsr playwright-core
 ```
 
-Or download binaries directly from [GitHub Releases](https://github.com/lagz0ne/pw-run/releases).
+Then install a browser:
+
+```bash
+npx playwright install chromium
+```
+
+Verify your setup:
+
+```bash
+bwsr doctor
+```
+
+### Direct Download
+
+Download binaries from [GitHub Releases](https://github.com/lagz0ne/pw-run/releases).
+
+**Note:** You still need `playwright-core` installed separately:
+
+```bash
+npm install playwright-core
+npx playwright install chromium
+```
+
+## Requirements
+
+- **playwright-core** >= 1.40.0 (peer dependency)
+- **Browser** - At least one of: Chromium, Firefox, or WebKit
+- **Platform** - Linux or macOS (no Windows support)
 
 ## Quick Start
 
@@ -106,11 +133,35 @@ Profile options:
 
 ### `bwsr doctor`
 
-Check system configuration and available browsers.
+Check runtime requirements, browser availability, and system configuration.
 
 ```bash
 bwsr doctor
+
+# bwsr doctor
+# ==================================================
+#
+# [Runtime]
+#   ✓ playwright-core: 1.57.0
+#
+# [Configuration]
+#   Config dir: ~/.bwsr
+#   Profiles:   ~/.bwsr/profiles
+#   Sockets:    ~/.bwsr/sockets
+#
+# [Browsers]
+#   ✓ chromium: ~/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+#   - firefox: not found
+#   - webkit: not found
+#
+# [Status]
+#   Running instances: 0
+#
+# ==================================================
+# ✓ All checks passed. Ready to use bwsr.
 ```
+
+If something is missing, doctor will suggest installation commands.
 
 ## Architecture
 

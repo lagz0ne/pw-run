@@ -29,8 +29,9 @@ describe("bwsr integration", () => {
 
   test("doctor command runs", async () => {
     const { stdout } = await $`bun run src/index.ts doctor`.quiet();
-    expect(stdout.toString()).toContain("Config dir:");
-    expect(stdout.toString()).toContain("Browsers:");
+    expect(stdout.toString()).toContain("[Runtime]");
+    expect(stdout.toString()).toContain("[Browsers]");
+    expect(stdout.toString()).toContain("[Configuration]");
   });
 
   test("help shows usage", async () => {
