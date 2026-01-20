@@ -19,7 +19,7 @@ jobs:
       - run: bun install
 
       - name: Type check
-        run: bunx @anthropic-ai/typescript-native
+        run: bunx tsc --noEmit
 
       - name: Run tests
         run: bun test

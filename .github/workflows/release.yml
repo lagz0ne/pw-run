@@ -87,51 +87,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - run: bun install
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Setup npm packages
+      - name: Create npm package
         run: |
-          mkdir -p npm-packages
-
-          # Create platform-specific packages
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
-            pkg_name="@bwsr/${platform}"
-            pkg_dir="npm-packages/${platform}"
-            mkdir -p "${pkg_dir}"
-
-            # Find and copy binary
-            find artifacts -name "bwsr-${platform}*" -exec cp {} "${pkg_dir}/bwsr" \;
-            chmod +x "${pkg_dir}/bwsr"
-
-            # Create package.json
-            cat > "${pkg_dir}/package.json" << EOF
-          {
-            "name": "${pkg_name}",
-            "version": "${GITHUB_REF_NAME#v}",
-            "os": ["$(echo $platform | cut -d- -f1)"],
-            "cpu": ["$(echo $platform | cut -d- -f2)"],
-            "bin": {
-              "bwsr": "./bwsr"
-            }
-          }
-          EOF
-          done
-
-      - name: Create main package
-        run: |
-          mkdir -p npm-packages/bwsr
+          mkdir -p npm-pkg/bin
           VERSION="${GITHUB_REF_NAME#v}"
 
-          cat > npm-packages/bwsr/package.json << EOF
+          cat > npm-pkg/package.json << EOF
           {
             "name": "bwsr",
             "version": "${VERSION}",
@@ -139,11 +100,8 @@ jobs:
             "bin": {
               "bwsr": "./bin/bwsr.js"
             },
-            "optionalDependencies": {
-              "@bwsr/linux-x64": "${VERSION}",
-              "@bwsr/linux-arm64": "${VERSION}",
-              "@bwsr/darwin-x64": "${VERSION}",
-              "@bwsr/darwin-arm64": "${VERSION}"
+            "scripts": {
+              "postinstall": "node ./scripts/postinstall.js"
             },
             "repository": {
               "type": "git",
@@ -154,53 +112,95 @@ jobs:
           }
           EOF
 
-          mkdir -p npm-packages/bwsr/bin
-          cat > npm-packages/bwsr/bin/bwsr.js << 'EOF'
-          #!/usr/bin/env node
-          const { execFileSync } = require("child_process");
+          mkdir -p npm-pkg/scripts
+          cat > npm-pkg/scripts/postinstall.js << 'SCRIPT'
+          const { execSync } = require("child_process");
+          const { createWriteStream, chmodSync, existsSync, mkdirSync } = require("fs");
           const { join } = require("path");
+          const https = require("https");
 
-          const platforms = {
-            "darwin-x64": "@bwsr/darwin-x64",
-            "darwin-arm64": "@bwsr/darwin-arm64",
-            "linux-x64": "@bwsr/linux-x64",
-            "linux-arm64": "@bwsr/linux-arm64",
+          const VERSION = require("../package.json").version;
+          const REPO = "lagz0ne/pw-run";
+
+          const PLATFORMS = {
+            "darwin-x64": "bwsr-darwin-x64",
+            "darwin-arm64": "bwsr-darwin-arm64",
+            "linux-x64": "bwsr-linux-x64",
+            "linux-arm64": "bwsr-linux-arm64",
           };
 
           const key = `${process.platform}-${process.arch}`;
-          const pkg = platforms[key];
+          const artifact = PLATFORMS[key];
 
-          if (!pkg) {
+          if (!artifact) {
             console.error(`Unsupported platform: ${key}`);
             process.exit(1);
           }
 
+          const binDir = join(__dirname, "..", "bin");
+          const binPath = join(binDir, "bwsr-binary");
+          const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${artifact}`;
+
+          if (existsSync(binPath)) {
+            process.exit(0);
+          }
+
+          if (!existsSync(binDir)) {
+            mkdirSync(binDir, { recursive: true });
+          }
+
+          console.log(`Downloading bwsr v${VERSION} for ${key}...`);
+
+          function download(url, dest) {
+            return new Promise((resolve, reject) => {
+              https.get(url, (res) => {
+                if (res.statusCode === 302 || res.statusCode === 301) {
+                  return download(res.headers.location, dest).then(resolve).catch(reject);
+                }
+                if (res.statusCode !== 200) {
+                  return reject(new Error(`Failed to download: ${res.statusCode}`));
+                }
+                const file = createWriteStream(dest);
+                res.pipe(file);
+                file.on("finish", () => {
+                  file.close();
+                  chmodSync(dest, 0o755);
+                  resolve();
+                });
+              }).on("error", reject);
+            });
+          }
+
+          download(url, binPath)
+            .then(() => console.log("Done!"))
+            .catch((err) => {
+              console.error(`Failed to download: ${err.message}`);
+              process.exit(1);
+            });
+          SCRIPT
+
+          cat > npm-pkg/bin/bwsr.js << 'WRAPPER'
+          #!/usr/bin/env node
+          const { execFileSync } = require("child_process");
+          const { join } = require("path");
+
+          const binPath = join(__dirname, "bwsr-binary");
+
           try {
-            const binPath = require.resolve(pkg);
-            const bwsr = join(binPath, "..", "bwsr");
-            execFileSync(bwsr, process.argv.slice(2), { stdio: "inherit" });
+            execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
           } catch (e) {
+            if (e.status !== undefined) {
+              process.exit(e.status);
+            }
             console.error(`Failed to run bwsr: ${e.message}`);
             process.exit(1);
           }
-          EOF
+          WRAPPER
 
       - name: Publish to npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-
-          # Publish platform packages first
-          for dir in npm-packages/linux-* npm-packages/darwin-*; do
-            if [ -d "$dir" ]; then
-              echo "Publishing $(basename $dir)..."
-              cd "$dir"
-              npm publish --access public || true
-              cd -
-            fi
-          done
-
-          # Publish main package
-          cd npm-packages/bwsr
+          cd npm-pkg
           npm publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
