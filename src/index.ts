@@ -121,6 +121,12 @@ async function handleProfileCommand(
         const [w, h] = (flags.viewport as string).split("x").map(Number);
         updates.viewport = { width: w, height: h };
       }
+      if (flags.colorScheme) updates.colorScheme = flags.colorScheme;
+      if (flags.userAgent) updates.userAgent = flags.userAgent;
+      if (flags.proxy) updates.proxy = flags.proxy;
+      if (flags.ignoreHTTPSErrors !== undefined) updates.ignoreHTTPSErrors = flags.ignoreHTTPSErrors === true || flags.ignoreHTTPSErrors === "true";
+      if (flags.offline !== undefined) updates.offline = flags.offline === true || flags.offline === "true";
+      if (flags.args) updates.args = (flags.args as string).split(",");
       await cmdProfileSet(args[1], updates);
       break;
     }
@@ -137,10 +143,54 @@ async function handleProfileCommand(
       await cmdProfileShow(args[1]);
       break;
 
+    case "help":
+    case undefined:
+      printProfileHelp();
+      break;
+
     default:
-      console.error("Usage: bwsr profile <create|set|remove|list|show> [name] [flags]");
+      console.error(`Unknown subcommand: ${subcommand}`);
+      printProfileHelp();
       process.exit(1);
   }
+}
+
+function printProfileHelp(): void {
+  console.log(`bwsr profile - Manage browser profiles
+
+Usage: bwsr profile <command> [name] [options]
+
+Commands:
+  create <name>     Create a new profile
+  set <name>        Update profile settings
+  remove <name>     Delete a profile
+  list              List all profiles
+  show <name>       Show profile details
+  help              Show this help
+
+Profile Settings (use with 'set'):
+  --browser <type>        Browser engine: chromium, firefox, webkit
+                          Default: chromium
+  --headless              Run in headless mode (no visible window)
+                          Default: true
+  --headed                Run in headed mode (visible window)
+  --executable <path>     Custom browser executable path
+  --viewport <WxH>        Viewport size, e.g., 1920x1080
+  --locale <code>         Browser locale, e.g., en-US, ja-JP
+  --timezone <tz>         Timezone, e.g., America/New_York
+  --colorScheme <mode>    Color scheme: light, dark, no-preference
+  --userAgent <string>    Custom user agent string
+  --proxy <url>           Proxy server URL
+  --ignoreHTTPSErrors     Ignore HTTPS certificate errors
+  --offline               Simulate offline mode
+  --args <arg1,arg2,...>  Additional browser args (comma-separated)
+
+Examples:
+  bwsr profile create mobile
+  bwsr profile set mobile --viewport 375x812 --userAgent "Mobile Safari"
+  bwsr profile set default --headed --colorScheme dark
+  bwsr profile set default --proxy http://localhost:8080
+  bwsr profile show default`);
 }
 
 async function printHelp(): Promise<void> {
