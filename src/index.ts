@@ -52,6 +52,7 @@ async function main(): Promise<void> {
         profile: flags.profile as string | undefined,
         session: flags.session as string | undefined,
         verbose: Boolean(flags.verbose),
+        force: Boolean(flags.force),
       });
       break;
 
@@ -59,12 +60,7 @@ async function main(): Promise<void> {
       if (flags.all) {
         await cmdStopAll();
       } else {
-        const session = args[1];
-        if (!session) {
-          console.error("Usage: bwsr stop <session> | --all");
-          process.exit(1);
-        }
-        await cmdStop(session);
+        await cmdStop(args[1]); // undefined if not provided, cmdStop handles it
       }
       break;
 
@@ -161,11 +157,12 @@ async function printHelp(): Promise<void> {
 Usage: bwsr <command> [options]
 
 Commands:
-  start                   Start browser daemon (auto-creates default profile)
+  start                   Start or reuse existing session
     --profile <name>      Use specific profile (default: "default")
-    --session <name>      Custom session name
+    --session <name>      Named session (starts new)
+    --force               Start new session even if one exists
     --verbose             Show connection details
-  stop <session>          Stop a specific session
+  stop [session]          Stop session (auto-selects if only one)
   stop --all              Stop all sessions
   list                    List running sessions
   cdp [session]           Get CDP endpoint URL
@@ -190,17 +187,17 @@ Quick Start:
      $ bwsr cdp
 
   3. Stop when done:
-     $ bwsr stop --all
+     $ bwsr stop
 
 Run 'bwsr doctor' to verify dependencies are installed.
 ${"=".repeat(50)}`);
   } else {
     console.log(`
 Examples:
-  bwsr start --verbose           # Start with default profile
-  bwsr cdp                       # Get CDP URL for tools
-  bwsr profile set default --headed  # Switch to headed mode
-  bwsr stop --all                # Clean up all sessions`);
+  bwsr start                     # Start or reuse existing session
+  bwsr cdp                       # Get CDP URL
+  bwsr stop                      # Stop the session
+  bwsr profile set default --headed  # Switch to headed mode`);
   }
 }
 

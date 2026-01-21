@@ -10,11 +10,29 @@ export async function cmdStart(options: {
   profile?: string;
   session?: string;
   verbose?: boolean;
+  force?: boolean;
 }): Promise<void> {
   await ensureDirectories();
 
   const profileName = options.profile || "default";
-  const session = options.session || "";
+  const explicitSession = options.session || "";
+
+  // If no explicit session requested, check if one is already running
+  if (!explicitSession && !options.force) {
+    const listRes = await client.list();
+    if (listRes.ok && "instances" in listRes && listRes.instances.length > 0) {
+      const inst = listRes.instances[0];
+      if (options.verbose) {
+        console.log(`Session: ${inst.session}`);
+        console.log(`CDP: ${inst.cdpPort}`);
+        console.log(`Profile: ${inst.profile}`);
+        console.log(`(already running, use --force to start another)`);
+      } else {
+        console.log(inst.session);
+      }
+      return;
+    }
+  }
 
   // Auto-create default profile if it doesn't exist
   const paths = getPaths();
@@ -31,7 +49,7 @@ export async function cmdStart(options: {
     }
   }
 
-  const res = await client.start(profileName, session);
+  const res = await client.start(profileName, explicitSession);
 
   if (!res.ok) {
     console.error(res.error);
@@ -47,7 +65,35 @@ export async function cmdStart(options: {
   }
 }
 
-export async function cmdStop(session: string): Promise<void> {
+export async function cmdStop(session?: string): Promise<void> {
+  // If no session specified, try to be smart
+  if (!session) {
+    const listRes = await client.list();
+    if (!listRes.ok || !("instances" in listRes)) {
+      console.error("No sessions running");
+      process.exit(1);
+    }
+
+    const instances = listRes.instances;
+    if (instances.length === 0) {
+      console.error("No sessions running");
+      process.exit(1);
+    }
+
+    if (instances.length === 1) {
+      // Only one session, stop it
+      session = instances[0].session;
+    } else {
+      // Multiple sessions, show list
+      console.error("Multiple sessions running. Specify which to stop:");
+      for (const inst of instances) {
+        console.error(`  bwsr stop ${inst.session}`);
+      }
+      console.error(`  bwsr stop --all`);
+      process.exit(1);
+    }
+  }
+
   const res = await client.stop(session);
   if (!res.ok) {
     console.error(res.error);
