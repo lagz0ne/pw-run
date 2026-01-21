@@ -225,29 +225,39 @@ Commands:
   doctor                  Check system health and dependencies
   version                 Show version`);
 
+  console.log(`
+${"=".repeat(60)}
+AI Agent Usage Patterns:
+
+  # Basic workflow - start once, reuse across tasks
+  bwsr start                     # Start browser (reuses if running)
+  CDP_URL=$(bwsr cdp)            # Get ws://localhost:PORT endpoint
+  # ... use CDP_URL with your tools ...
+  bwsr stop                      # Cleanup when done
+
+  # Connect via CDP (Chrome DevTools Protocol)
+  playwright connect $(bwsr cdp)
+  puppeteer.connect({ browserWSEndpoint: "$(bwsr cdp)" })
+
+  # Parallel sessions for concurrent tasks
+  bwsr start --session research  # Named session
+  bwsr start --session testing   # Another session
+  bwsr cdp research              # Get specific endpoint
+  bwsr stop research             # Stop specific session
+
+  # Visible browser for debugging
+  bwsr profile set default --headed
+  bwsr stop && bwsr start --force
+
+  # Configure for web scraping
+  bwsr profile set default --viewport 1920x1080 --locale en-US
+
+  # Run 'bwsr profile' for all configuration options
+${"=".repeat(60)}`);
+
   if (isFirstTime) {
     console.log(`
-${"=".repeat(50)}
-Quick Start:
-
-  1. Start a browser session:
-     $ bwsr start
-
-  2. Get CDP endpoint for your tools:
-     $ bwsr cdp
-
-  3. Stop when done:
-     $ bwsr stop
-
-Run 'bwsr doctor' to verify dependencies are installed.
-${"=".repeat(50)}`);
-  } else {
-    console.log(`
-Examples:
-  bwsr start                     # Start or reuse existing session
-  bwsr cdp                       # Get CDP URL
-  bwsr stop                      # Stop the session
-  bwsr profile set default --headed  # Switch to headed mode`);
+First time? Run 'bwsr doctor' to verify dependencies.`);
   }
 }
 
