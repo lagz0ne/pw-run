@@ -231,13 +231,29 @@ AI Agent Usage Patterns:
 
   # Basic workflow - start once, reuse across tasks
   bwsr start                     # Start browser (reuses if running)
-  CDP_URL=$(bwsr cdp)            # Get ws://localhost:PORT endpoint
-  # ... use CDP_URL with your tools ...
+  CDP=$(bwsr cdp)                # Get ws://localhost:PORT endpoint
   bwsr stop                      # Cleanup when done
 
-  # Connect via CDP (Chrome DevTools Protocol)
-  playwright connect $(bwsr cdp)
-  puppeteer.connect({ browserWSEndpoint: "$(bwsr cdp)" })
+  # Use with Playwright (in code)
+  import { chromium } from 'playwright-core';
+  const browser = await chromium.connectOverCDP(process.env.CDP);
+  const context = browser.contexts()[0];
+  const page = context.pages()[0] || await context.newPage();
+
+  # Use with Puppeteer (in code)
+  import puppeteer from 'puppeteer-core';
+  const browser = await puppeteer.connect({ browserWSEndpoint: CDP });
+
+  # Use with agent-browser CLI
+  bwsr start
+  agent-browser --cdp $(bwsr cdp) snapshot
+  agent-browser --cdp $(bwsr cdp) click --ref e5
+  agent-browser --cdp $(bwsr cdp) screenshot tmp/page.png
+
+  # Use with dev-browser (set CDP_ENDPOINT env)
+  bwsr start
+  export CDP_ENDPOINT=$(bwsr cdp)
+  cd dev-browser && npx tsx script.ts
 
   # Parallel sessions for concurrent tasks
   bwsr start --session research  # Named session
