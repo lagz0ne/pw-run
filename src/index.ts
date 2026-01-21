@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // src/index.ts
 import { runWatchdog } from "./watchdog";
 import {
@@ -14,6 +15,7 @@ import {
   cmdDoctor,
 } from "./cli/commands";
 
+const VERSION = "0.3.0";
 const args = process.argv.slice(2);
 
 function parseFlags(args: string[]): Record<string, string | boolean> {
@@ -82,8 +84,20 @@ async function main(): Promise<void> {
       await cmdDoctor();
       break;
 
+    case "--version":
+    case "-v":
+    case "version":
+      console.log(`bwsr v${VERSION}`);
+      break;
+
+    case "--help":
+    case "-h":
+    case "help":
+      await printHelp();
+      break;
+
     default:
-      printHelp();
+      await printHelp();
       break;
   }
 }
@@ -133,26 +147,61 @@ async function handleProfileCommand(
   }
 }
 
-function printHelp(): void {
-  console.log(`bwsr - Browser daemon manager
+async function printHelp(): Promise<void> {
+  const { getPaths } = await import("./utils/paths");
+  const { ProfileManager } = await import("./profile/manager");
+
+  const paths = getPaths();
+  const manager = new ProfileManager(paths.profiles);
+  const profiles = await manager.list();
+  const isFirstTime = profiles.length === 0;
+
+  console.log(`bwsr v${VERSION} - Browser daemon manager
 
 Usage: bwsr <command> [options]
 
 Commands:
-  start [--profile name] [--session name] [--verbose]
-  stop <session> | --all
-  list
-  cdp [session]
-  profile <create|set|remove|list|show> [name] [flags]
-  doctor
+  start                   Start browser daemon (auto-creates default profile)
+    --profile <name>      Use specific profile (default: "default")
+    --session <name>      Custom session name
+    --verbose             Show connection details
+  stop <session>          Stop a specific session
+  stop --all              Stop all sessions
+  list                    List running sessions
+  cdp [session]           Get CDP endpoint URL
+  profile                 Manage browser profiles
+    create <name>         Create new profile
+    set <name> [flags]    Update profile settings
+    remove <name>         Delete profile
+    list                  List all profiles
+    show <name>           Show profile details
+  doctor                  Check system health and dependencies
+  version                 Show version`);
 
+  if (isFirstTime) {
+    console.log(`
+${"=".repeat(50)}
+Quick Start:
+
+  1. Start a browser session:
+     $ bwsr start
+
+  2. Get CDP endpoint for your tools:
+     $ bwsr cdp
+
+  3. Stop when done:
+     $ bwsr stop --all
+
+Run 'bwsr doctor' to verify dependencies are installed.
+${"=".repeat(50)}`);
+  } else {
+    console.log(`
 Examples:
-  bwsr profile create default
-  bwsr profile set default --browser chromium --headless
-  bwsr start
-  bwsr cdp
-  agent-browser --cdp $(bwsr cdp) snapshot
-  bwsr stop --all`);
+  bwsr start --verbose           # Start with default profile
+  bwsr cdp                       # Get CDP URL for tools
+  bwsr profile set default --headed  # Switch to headed mode
+  bwsr stop --all                # Clean up all sessions`);
+  }
 }
 
 main().catch((err) => {

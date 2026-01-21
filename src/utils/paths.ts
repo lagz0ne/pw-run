@@ -1,6 +1,7 @@
 // src/utils/paths.ts
 import { homedir } from "os";
 import { join } from "path";
+import { mkdir } from "fs/promises";
 
 export interface BwsrPaths {
   root: string;
@@ -28,6 +29,6 @@ export function getPaths(): BwsrPaths {
 
 export async function ensureDirectories(): Promise<void> {
   const paths = getPaths();
-  await Bun.write(paths.profiles + "/.keep", "");
-  await Bun.write(paths.sockets + "/.keep", "");
+  await mkdir(paths.profiles, { recursive: true });
+  await mkdir(paths.sockets, { recursive: true });
 }

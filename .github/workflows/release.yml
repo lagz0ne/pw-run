@@ -9,25 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - target: linux-x64
-            os: ubuntu-latest
-            artifact: bwsr-linux-x64
-          - target: linux-arm64
-            os: ubuntu-latest
-            artifact: bwsr-linux-arm64
-          - target: darwin-x64
-            os: macos-latest
-            artifact: bwsr-darwin-x64
-          - target: darwin-arm64
-            os: macos-latest
-            artifact: bwsr-darwin-arm64
-
-    runs-on: ${{ matrix.os }}
-
+  release:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -37,173 +20,23 @@ jobs:
 
       - run: bun install
 
-      - name: Build binary
+      - name: Build
+        run: bun run build
+
+      - name: Update version in package.json
         run: |
-          bun build --compile --minify src/index.ts \
-            --target=bun-${{ matrix.target }} \
-            --outfile dist/${{ matrix.artifact }} \
-            --external playwright-core --external chromium-bidi --external electron
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p release
-          find dist -type f -exec mv {} release/ \;
-          chmod +x release/bwsr-*
-          ls -la release/
-
-      - name: Create checksums
-        run: |
-          cd release
-          sha256sum * > checksums.txt
-          cat checksums.txt
+          VERSION="${GITHUB_REF_NAME#v}"
+          jq --arg v "$VERSION" '.version = $v' package.json > package.tmp.json
+          mv package.tmp.json package.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/*
           generate_release_notes: true
-
-  publish-npm:
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create npm package
-        run: |
-          mkdir -p npm-pkg/bin
-          VERSION="${GITHUB_REF_NAME#v}"
-
-          cat > npm-pkg/package.json << EOF
-          {
-            "name": "bwsr",
-            "version": "${VERSION}",
-            "description": "Fast CLI for managing browser daemons via Playwright CDP",
-            "bin": {
-              "bwsr": "./bin/bwsr.js"
-            },
-            "scripts": {
-              "postinstall": "node ./scripts/postinstall.js"
-            },
-            "peerDependencies": {
-              "playwright-core": ">=1.40.0"
-            },
-            "repository": {
-              "type": "git",
-              "url": "https://github.com/lagz0ne/pw-run"
-            },
-            "keywords": ["browser", "playwright", "cdp", "automation", "cli"],
-            "license": "MIT"
-          }
-          EOF
-
-          mkdir -p npm-pkg/scripts
-          cat > npm-pkg/scripts/postinstall.js << 'SCRIPT'
-          const { execSync } = require("child_process");
-          const { createWriteStream, chmodSync, existsSync, mkdirSync } = require("fs");
-          const { join } = require("path");
-          const https = require("https");
-
-          const VERSION = require("../package.json").version;
-          const REPO = "lagz0ne/pw-run";
-
-          const PLATFORMS = {
-            "darwin-x64": "bwsr-darwin-x64",
-            "darwin-arm64": "bwsr-darwin-arm64",
-            "linux-x64": "bwsr-linux-x64",
-            "linux-arm64": "bwsr-linux-arm64",
-          };
-
-          const key = `${process.platform}-${process.arch}`;
-          const artifact = PLATFORMS[key];
-
-          if (!artifact) {
-            console.error(`Unsupported platform: ${key}`);
-            process.exit(1);
-          }
-
-          const binDir = join(__dirname, "..", "bin");
-          const binPath = join(binDir, "bwsr-binary");
-          const url = `https://github.com/${REPO}/releases/download/v${VERSION}/${artifact}`;
-
-          if (existsSync(binPath)) {
-            process.exit(0);
-          }
-
-          if (!existsSync(binDir)) {
-            mkdirSync(binDir, { recursive: true });
-          }
-
-          console.log(`Downloading bwsr v${VERSION} for ${key}...`);
-
-          function download(url, dest) {
-            return new Promise((resolve, reject) => {
-              https.get(url, (res) => {
-                if (res.statusCode === 302 || res.statusCode === 301) {
-                  return download(res.headers.location, dest).then(resolve).catch(reject);
-                }
-                if (res.statusCode !== 200) {
-                  return reject(new Error(`Failed to download: ${res.statusCode}`));
-                }
-                const file = createWriteStream(dest);
-                res.pipe(file);
-                file.on("finish", () => {
-                  file.close();
-                  chmodSync(dest, 0o755);
-                  resolve();
-                });
-              }).on("error", reject);
-            });
-          }
-
-          download(url, binPath)
-            .then(() => console.log("Done!"))
-            .catch((err) => {
-              console.error(`Failed to download: ${err.message}`);
-              process.exit(1);
-            });
-          SCRIPT
-
-          cat > npm-pkg/bin/bwsr.js << 'WRAPPER'
-          #!/usr/bin/env node
-          const { execFileSync } = require("child_process");
-          const { join } = require("path");
-
-          const binPath = join(__dirname, "bwsr-binary");
-
-          try {
-            execFileSync(binPath, process.argv.slice(2), { stdio: "inherit" });
-          } catch (e) {
-            if (e.status !== undefined) {
-              process.exit(e.status);
-            }
-            console.error(`Failed to run bwsr: ${e.message}`);
-            process.exit(1);
-          }
-          WRAPPER
 
       - name: Publish to npm
         run: |
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          cd npm-pkg
           npm publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -5,10 +5,10 @@
   "module": "src/index.ts",
   "type": "module",
   "bin": {
-    "bwsr": "./dist/bwsr"
+    "bwsr": "./dist/bwsr.js"
   },
   "scripts": {
-    "build": "bun build --compile --minify src/index.ts --outfile dist/bwsr --external playwright-core --external chromium-bidi --external electron",
+    "build": "bun build src/index.ts --outfile dist/bwsr.js --target node --minify --external playwright-core --external chromium-bidi --external electron",
     "dev": "bun run src/index.ts",
     "test": "bun test"
   },
@@ -16,13 +16,22 @@
     "type": "git",
     "url": "https://github.com/lagz0ne/pw-run"
   },
-  "keywords": ["browser", "playwright", "cdp", "automation", "cli", "bun"],
+  "keywords": ["browser", "playwright", "cdp", "automation", "cli"],
   "license": "MIT",
+  "files": [
+    "dist/bwsr.js"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "playwright-core": ">=1.40.0"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "playwright-core": "^1.57.0"
   },
   "dependencies": {
-    "playwright-core": "^1.57.0",
     "yaml": "^2.3.4"
   }
 }

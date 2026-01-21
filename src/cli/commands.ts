@@ -13,10 +13,25 @@ export async function cmdStart(options: {
 }): Promise<void> {
   await ensureDirectories();
 
-  const profile = options.profile || "default";
+  const profileName = options.profile || "default";
   const session = options.session || "";
 
-  const res = await client.start(profile, session);
+  // Auto-create default profile if it doesn't exist
+  const paths = getPaths();
+  const manager = new ProfileManager(paths.profiles);
+  const existingProfile = await manager.get(profileName);
+
+  if (!existingProfile) {
+    if (profileName === "default") {
+      await manager.create("default", { browser: "chromium", headless: true });
+      console.log("Created default profile (chromium, headless)");
+    } else {
+      console.error(`Profile '${profileName}' not found. Create it with: bwsr profile create ${profileName}`);
+      process.exit(1);
+    }
+  }
+
+  const res = await client.start(profileName, session);
 
   if (!res.ok) {
     console.error(res.error);
@@ -26,7 +41,7 @@ export async function cmdStart(options: {
   if (options.verbose && "session" in res) {
     console.log(`Session: ${res.session}`);
     console.log(`CDP: ${res.cdpPort}`);
-    console.log(`Profile: ${profile}`);
+    console.log(`Profile: ${profileName}`);
   } else if ("session" in res) {
     console.log(res.session);
   }
@@ -163,22 +178,38 @@ function checkVersion(version: string): { supported: boolean; message: string } 
 }
 
 export async function cmdDoctor(): Promise<void> {
+  await ensureDirectories();
   const paths = getPaths();
   let hasIssues = false;
+  const suggestions: string[] = [];
 
   console.log("bwsr doctor\n");
   console.log("=".repeat(50));
 
-  // 1. Check playwright-core
+  // 1. Check Node.js version
   console.log("\n[Runtime]");
+  const nodeVersion = process.version;
+  const nodeMajor = parseInt(nodeVersion.slice(1).split(".")[0]);
+  if (nodeMajor >= 18) {
+    console.log(`  ✓ Node.js: ${nodeVersion}`);
+  } else {
+    console.log(`  ✗ Node.js: ${nodeVersion} (requires >=18.0.0)`);
+    hasIssues = true;
+    suggestions.push("Upgrade Node.js to version 18 or later");
+  }
+
+  // 2. Check playwright-core
   let playwrightVersion: string | null = null;
 
   try {
     await import("playwright-core");
     // Try to get version from package
     try {
+      const { createRequire } = await import("module");
+      const require = createRequire(import.meta.url);
       const pkgPath = require.resolve("playwright-core/package.json");
-      const pkg = await Bun.file(pkgPath).json();
+      const { readFile } = await import("fs/promises");
+      const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
       playwrightVersion = pkg.version;
     } catch {
       playwrightVersion = "installed (version unknown)";
@@ -202,15 +233,26 @@ export async function cmdDoctor(): Promise<void> {
   } else {
     console.log("  ✗ playwright-core: not found");
     hasIssues = true;
+    suggestions.push("Install playwright-core:\n    npm install -g playwright-core\n    # or add to your project:\n    npm install playwright-core");
   }
 
-  // 2. Check directories
+  // 3. Check directories and profiles (auto-fix missing default)
   console.log("\n[Configuration]");
   console.log(`  Config dir: ${paths.root}`);
-  console.log(`  Profiles:   ${paths.profiles}`);
-  console.log(`  Sockets:    ${paths.sockets}`);
 
-  // 3. Check for browsers
+  const manager = new ProfileManager(paths.profiles);
+  let profiles = await manager.list();
+
+  if (profiles.length === 0) {
+    // Auto-create default profile
+    await manager.create("default", { browser: "chromium", headless: true });
+    profiles = ["default"];
+    console.log(`  ✓ Profiles: default (created)`);
+  } else {
+    console.log(`  ✓ Profiles: ${profiles.join(", ")}`);
+  }
+
+  // 4. Check for browsers
   console.log("\n[Browsers]");
   const { discoverBrowser } = await import("../browser/discovery");
 
@@ -227,9 +269,10 @@ export async function cmdDoctor(): Promise<void> {
 
   if (browsersFound === 0) {
     hasIssues = true;
+    suggestions.push("Install browsers:\n    npx playwright install chromium\n    # or for all browsers:\n    npx playwright install");
   }
 
-  // 4. Check running instances
+  // 5. Check running instances
   console.log("\n[Status]");
   try {
     const res = await client.list();
@@ -237,29 +280,24 @@ export async function cmdDoctor(): Promise<void> {
       console.log(`  Running instances: ${res.instances.length}`);
     }
   } catch {
-    console.log("  Watchdog: not running");
+    console.log("  Watchdog: not running (starts automatically on 'bwsr start')");
   }
 
-  // 5. Suggestions
-  if (hasIssues) {
-    console.log("\n" + "=".repeat(50));
-    console.log("[Suggestions]\n");
+  // 6. Suggestions
+  console.log("\n" + "=".repeat(50));
 
-    if (!playwrightVersion) {
-      console.log("  Install playwright-core:");
-      console.log("    npm install playwright-core");
-      console.log("    # or");
-      console.log("    bun add playwright-core\n");
+  if (hasIssues && suggestions.length > 0) {
+    console.log("\n[Setup Required]\n");
+    for (const suggestion of suggestions) {
+      console.log(`  ${suggestion}\n`);
     }
-
-    if (browsersFound === 0) {
-      console.log("  Install browsers:");
-      console.log("    npx playwright install chromium");
-      console.log("    # or for all browsers:");
-      console.log("    npx playwright install\n");
-    }
+  } else if (hasIssues) {
+    console.log("\nSome checks failed. Review the output above.\n");
   } else {
-    console.log("\n" + "=".repeat(50));
     console.log("\n✓ All checks passed. Ready to use bwsr.\n");
+    console.log("Quick start:");
+    console.log("  bwsr start           # Start browser daemon");
+    console.log("  bwsr cdp             # Get CDP endpoint");
+    console.log("  bwsr stop --all      # Stop all sessions\n");
   }
 }
